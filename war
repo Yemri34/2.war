@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cephe Savaşları</title>
+<style>
+:root{--bg:#e9e4d6;--fg:#1c2a2e;--card:#f7f4ea;--mut:#5b6b6e;--ac:#0f766e;--line:#cfc8b3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1719;--fg:#e4ece9;--card:#16242a;--mut:#8fa3a6;--ac:#2dd4bf;--line:#26383e}}
+:root[data-theme="dark"]{--bg:#0e1719;--fg:#e4ece9;--card:#16242a;--mut:#8fa3a6;--ac:#2dd4bf;--line:#26383e}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--fg);font:15px/1.4 "Trebuchet MS",Verdana,sans-serif;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+h1{margin:0;font:800 26px/1 Georgia,"Times New Roman",serif}
+.top,.wrap,.ctl{width:100%;max-width:760px}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.top span{color:var(--mut);font-size:13px}
+.wrap{position:relative;border:2px solid var(--line);border-radius:6px;overflow:hidden;background:#215a8a}
+canvas{display:block;width:100%;height:auto;cursor:crosshair}
+.ov{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(10,20,24,.78);color:#fff;text-align:center;padding:16px}
+.ov.on{display:flex}
+.ov b{font:800 32px Georgia,serif}
+button{font:inherit;font-weight:700;background:var(--ac);color:#06201d;border:0;border-radius:6px;padding:9px 16px;cursor:pointer}
+button.alt{background:transparent;color:var(--fg);border:2px solid var(--line)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+.ctl{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:720px){.ctl{grid-template-columns:1fr 1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.card input{width:100%;accent-color:var(--ac)}
+.stats{display:flex;gap:16px;margin-bottom:6px;font-weight:700;flex-wrap:wrap}
+.btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+select{font:inherit;padding:8px;border-radius:6px;border:2px solid var(--line);background:var(--card);color:var(--fg)}
+#lb{columns:2;column-gap:16px}
+.row{display:flex;align-items:center;gap:8px;padding:2px 0;break-inside:avoid}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.row i{margin-left:auto;font-style:normal;color:var(--mut);font-size:13px}
+.dead{opacity:.4;text-decoration:line-through}
+#msg{min-height:20px;color:var(--mut);font-size:13px}
+</style>
+</head>
+<body>
+<div class="top"><h1>Cephe Savaşları</h1><span>Herhangi bir yere dokun: ordun o yöne doğru boş araziyi yayılarak ele geçirir. Bir komşu ülkeye dokunursan ona saldırırsın. Avrupa haritasında ülkeni seç; tüm rakip ülkeleri yok eden kazanır.</span></div>
+<div class="wrap">
+<canvas id="c" width="720" height="688"></canvas>
+<div class="ov" id="ov"><b id="ot"></b><button id="again">Yeniden oyna</button></div>
+</div>
+<div class="ctl">
+<div class="card">
+<div class="stats"><span id="sT"></span><span id="sA"></span><span id="sL"></span></div>
+<label for="pct">Her hamlede kullanılan birlik: <b id="pv">40%</b></label>
+<input id="pct" type="range" min="10" max="100" step="5" value="40">
+<div id="msg"></div>
+<div class="btns"><select id="country" aria-label="Ülkeni seç"></select><button id="pause">Duraklat</button><button id="cancel" class="alt">Saldırıyı geri çek</button></div>
+</div>
+<div class="card" id="lb"></div>
+</div>
+<script>
+const W=90,H=86,N=W*H,S=8,WATER=255,NP=28;
+const COL=['#b9b29c',...Array.from({length:NP},(_,i)=>'hsl('+(i*137.5%360).toFixed(0)+',70%,50%)')];
+let NAMES=[];
+const CO=[['Almanya',13.4,52.5],['Sovyetler Birliği',37.6,55.8],['İngiltere',-0.1,51.5],['Fransa',2.35,48.85],['İtalya',12.5,41.9],['Polonya',21,52.2],['Romanya',26.1,44.4],['Macaristan',19,47.5],['Bulgaristan',23.3,42.7],['Yugoslavya',20.5,44.8],['Yunanistan',23.7,38],['Türkiye',32.9,39.9],['Finlandiya',24.9,60.2],['İsveç',15,59.8],['Norveç',10.7,59.9],['Danimarka',9.8,56],['Hollanda',4.9,52.4],['Belçika',4.4,50.85],['İspanya',-3.7,40.4],['Portekiz',-8.2,39.5],['İsviçre',7.5,46.9],['Avusturya',14.3,47.4],['Çekoslovakya',15.5,49.8],['İrlanda',-7.5,53.2],['Arnavutluk',20,41.2],['Estonya',25.5,58.7],['Letonya',25,56.9],['Litvanya',24,55.2]];
+const shuf=a=>a.map(v=>[Math.random(),v]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
+const cv=document.getElementById('c'),cx=cv.getContext('2d');
+const tc=document.createElement('canvas');tc.width=W*S;tc.height=H*S;const tx=tc.getContext('2d');
+const MK=new Uint32Array(N);let stamp=0;
+let g,E,CITY,P,atk,paused,over,tk,SP,LAND,ORD,CAPC;
+const rnd=n=>Math.floor(Math.random()*n);
+const nb=i=>{const x=i%W,r=[];if(x>0)r.push(i-1);if(x<W-1)r.push(i+1);if(i>=W)r.push(i-W);if(i<N-W)r.push(i+W);return r};
+const mk=f=>{const a=Array.from({length:(f+2)*(f+2)},Math.random),s=t=>t*t*(3-2*t);return(x,y)=>{const u=x/W*f,v=y/H*f,ix=u|0,iy=v|0,fx=s(u-ix),fy=s(v-iy),q=(i,j)=>a[(iy+j)*(f+2)+ix+i];return(q(0,0)*(1-fx)+q(1,0)*fx)*(1-fy)+(q(0,1)*(1-fx)+q(1,1)*fx)*fy}};
+const mul=e=>e<.58?1:e<.7?1.3:e<.8?1.8:2.5;
+const ter=e=>e<.5?'#7aa35a':e<.58?'#678f4d':e<.7?'#8c8a5a':e<.8?'#85796a':'#d7dbdc';
+const fmt=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1)+'B':''+Math.floor(n);
+const man=(a,b)=>Math.abs(a%W-b%W)+Math.abs((a/W|0)-(b/W|0));
+
+const MAIN=[-9,37,-9.5,38.7,-8.8,41.2,-9.3,43,-8,43.7,-5.5,43.6,-1.8,43.4,-1.2,46,-2.3,47.1,-4.7,48,-4.6,48.6,-1.6,48.6,-1.5,49.7,0.2,49.6,1.6,50.9,3,51.2,4,51.7,4.6,52.9,6.5,53.5,8.6,53.9,8.6,54.9,8.1,55.5,8.1,56.8,10.6,57.7,10.3,56.2,9.7,55.4,10.2,54.4,12.2,54.2,14,53.9,17,54.7,19.7,54.4,21,55.3,21,56.5,21.4,57.6,23,57.1,24,57.3,24.4,58.3,23.5,59.2,25,59.6,28,59.5,30,59.9,28,60.5,23,59.9,21.4,61.5,21.3,63,23.2,64,25,65,25.3,65.6,24,65.8,21,64.7,19.5,63.5,17.5,62.6,17.3,61,18.5,60.2,16.7,58.5,16.6,57,15.5,56.2,14.2,55.4,13,55.4,12.8,56.1,12.2,57.2,11.8,58.3,11.1,59.1,10.6,59.9,10,59.2,8,58.1,6.5,58.2,5.6,59,5,60.4,5.1,62,6.5,62.9,8.5,63.6,11.5,65.3,13,66.5,14.5,68,17,70,31,71,45,71,45,37,42,37.1,36.5,36.7,36,36.2,34.5,36.7,32.5,36.1,30.6,36.7,29,36.6,27.5,37,27,38.3,26.4,39.3,26.2,40,25.5,40.85,24,40.9,23.5,40.3,22.8,40.4,22.6,39.5,23.2,38.8,24,38.1,23.1,37.6,22.8,36.5,21.7,36.8,21.1,37.8,21.3,38.3,20.7,38.9,20.2,39.7,19.4,40.4,19.5,41.5,19.3,42.2,18.6,42.4,17.5,43,16.4,43.5,15.2,44.2,14.5,45.2,13.6,45.1,13.7,45.7,12.4,45.4,12.3,44.5,13.6,43.6,14.2,42.4,16,41.9,17,41.1,18.5,40.2,17.2,40.4,16.6,39.7,17.1,38.9,16.1,37.9,15.8,38.2,16.2,38.9,15.6,40,14.8,40.6,14.2,40.8,13,41.3,12.2,41.8,11,42.5,10.4,43.4,8.8,44.4,7.6,43.8,6.8,43.5,6,43.1,4.9,43.4,3.5,43.4,3.1,42.5,3.2,41.9,2.2,41.3,0.9,40.8,0.3,40.2,-0.3,39.3,0.2,38.8,-0.6,38.1,-0.7,37.6,-2,36.8,-4.4,36.7,-5.3,36.1,-6.3,36.5,-7.4,37.2];
+const BSEA=[29.1,41.2,28,42,27.8,43.2,28.6,44.2,29.7,45.2,30.5,46.4,32,46.4,33,45.3,34.5,44.7,36.5,45.2,37.5,44.6,39.7,43.4,41.5,41.8,41.5,41.3,39,41,36,41.4,34.5,42,32,41.7,30.5,41.2];
+const ISL=[[-5.7,50,-3,50.6,1.4,51,1.7,52.7,0.3,53.5,-0.2,54.5,-1.5,55.5,-2,56.5,-1.8,57.6,-3.5,57.7,-4,58.6,-3,58.7,-5,58.6,-6,57.5,-5.7,56,-5,55,-3,54.8,-3,53.4,-4.5,53.3,-4.7,52,-5.2,51.7,-3,51.4,-4.2,51.2],[-6,52.2,-6,54,-5.5,54.5,-7,55.2,-8.5,54.5,-10,54,-10,52,-8,51.6],[12.5,38,15.6,38.3,15.1,36.7,12.7,37.5],[8.2,41,9.6,41,9.7,39.2,8.6,39,8.2,40],[23.6,35.5,26.3,35.3,24.5,35,23.6,35.2]];
+const BUMP=[[10,46.8,3.5,.4],[0,42.7,2.5,.3],[23,48,2.5,.25],[25.5,46,2,.25],[17.5,43.8,2.2,.3],[23,41.8,1.8,.3],[9,61.5,2.5,.35],[14,65,3,.3],[43,42.5,3,.35],[13,42.5,1.5,.25],[40,39,3,.2],[33,37.3,2.5,.3],[-4.5,57,1.5,.2]];
+const BR=[[1.2,51.2,1.9,50.8],[-6.1,53.3,-4.5,53.3]];
+const pr=(lo,la)=>[(lo+11)*W/56,(68-la)*W/56*1.6];
+const prs=a=>{const r=[];for(let i=0;i<a.length;i+=2)r.push(pr(a[i],a[i+1]));return r};
+const inP=(x,y,p)=>{let c=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[i],b=p[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
+function genMap(){
+  const main=prs(MAIN),sea=prs(BSEA),isl=ISL.map(prs);
+  const n1=mk(3),n2=mk(6),n3=mk(13),n4=mk(29);
+  g=new Uint8Array(N).fill(WATER);E=new Float32Array(N);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const px=x+.5,py=y+.5,i=y*W+x;
+    if((inP(px,py,main)&&!inP(px,py,sea))||isl.some(p=>inP(px,py,p))){
+      g[i]=0;const lo=px*56/W-11,la=68-py*56/(W*1.6);
+      let e=.36+.22*(.5*n2(x,y)+.3*n3(x,y)+.2*n4(x,y));
+      for(const b of BUMP)e+=b[3]*Math.exp(-((lo-b[0])**2*.4+(la-b[1])**2)/(2*b[2]*b[2]));
+      E[i]=e;
+    }else E[i]=.2+.2*n1(x,y);
+  }
+  for(const b of BR){const[a0,a1]=pr(b[0],b[1]),[c0,c1]=pr(b[2],b[3]);for(let s=0;s<=1;s+=.05){const x=Math.floor(a0+(c0-a0)*s),y=Math.floor(a1+(c1-a1)*s);if(x>=0&&x<W&&y>=0&&y<H){g[y*W+x]=0;E[y*W+x]=.45}}}
+  CAPC=CO.map(c=>{const[px,py]=pr(c[1],c[2]);let best=-1,bd=1e9;for(let y=Math.max(0,(py-8)|0);y<Math.min(H,py+8);y++)for(let x=Math.max(0,(px-8)|0);x<Math.min(W,px+8);x++){const i=y*W+x;if(g[i]!==WATER){const d=(x-px)**2+(y-py)**2;if(d<bd){bd=d;best=i}}}return best});
+  CITY=CAPC.filter(c=>c>=0);
+}
+function renderTerrain(){
+  for(let i=0;i<N;i++){
+    const e=E[i],x=(i%W)*S,y=(i/W|0)*S;
+    if(g[i]===WATER){
+      let sh=false;for(const j of nb(i))if(g[j]!==WATER){sh=true;break}
+      tx.fillStyle=sh?'#3f86b3':e<.3?'#12305a':e<.38?'#1a4572':'#215a8a';
+      tx.fillRect(x,y,S,S);continue;
+    }
+    tx.globalAlpha=1;tx.fillStyle=ter(e);tx.fillRect(x,y,S,S);
+    const d=(i-W-1>=0&&i+W+1<N)?E[i-W-1]-E[i+W+1]:0;
+    tx.globalAlpha=Math.min(.4,Math.abs(d)*3.5);tx.fillStyle=d>0?'#000':'#fff';tx.fillRect(x,y,S,S);
+    tx.globalAlpha=(((i*2654435761)>>>0)%100)/1200;tx.fillStyle='#000';tx.fillRect(x,y,S,S);
+  }
+  tx.globalAlpha=1;
+}
+function init(){
+  genMap();const sv=+document.getElementById('country').value;ORD=shuf(CO.map((_,i)=>i).filter(i=>i!==sv));ORD.unshift(sv);NAMES=['',...ORD.map(i=>CO[i][0])];
+  P=[null];atk=[];paused=false;over=false;tk=0;
+  for(let id=1;id<=NP;id++){
+    P.push({id,troops:id>1?80:120,cells:0,bot:id>1,alive:true});
+    const c=CAPC[ORD[id-1]],sx=c%W,sy=c/W|0;
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const x=sx+dx,y=sy+dy;if(dx*dx+dy*dy<=7&&x>=0&&x<W&&y>=0&&y<H&&g[y*W+x]===0){g[y*W+x]=id;P[id].cells++}}
+    if(!P[id].cells){const pv=g[c];if(pv>0)P[pv].cells--;g[c]=id;P[id].cells=1}
+  }
+  LAND=0;for(let i=0;i<N;i++)if(g[i]!==WATER)LAND++;
+  renderTerrain();
+  document.getElementById('ov').classList.remove('on');
+  document.getElementById('pause').textContent='Duraklat';
+  draw();ui();
+}
+function take(c,o){
+  const old=g[c];
+  if(old>0){const d=P[old];d.cells--;const lost=d.troops/(d.cells+1);d.troops-=lost;P[o].troops+=lost*(d.cells<=0?1:.6);if(d.cells<=0){d.alive=false;d.troops=0;atk=atk.filter(a=>a.o!==old&&a.t!==old)}}
+  g[c]=o;P[o].cells++;
+}
+function borders(o,t){
+  for(let i=0;i<N;i++)if(g[i]===o)for(const j of nb(i))if(g[j]===t)return true;
+  return false;
+}
+function launch(o,t,pct,fx,fy){
+  const n=P[o].troops*pct;
+  if(n<10)return false;
+  P[o].troops-=n;
+  const a=atk.find(a=>a.o===o&&a.t===t);
+  if(a){a.n+=n;if(fx!=null){a.fx=fx;a.fy=fy}}
+  else atk.push({o,t,n,fx,fy});
+  return true;
+}
+function botThink(b){
+  const early=tk<900;if(!b.alive||b.troops<(early?25:60+b.cells*2))return;
+  if(atk.filter(a=>a.o===b.id).length>=(early?3:1))return;if(!early&&Math.random()<.5)return;
+  const adj=new Set();
+  for(let i=0;i<N;i++)if(g[i]===b.id)for(const j of nb(i)){const o=g[j];if(o!==WATER&&o!==b.id)adj.add(o)}
+  if(!adj.size)return;
+  let t=-1;
+  if(adj.has(0)&&(early||Math.random()<.3||adj.size===1))t=0;
+  else{
+    const arr=[...adj].filter(x=>x>0&&P[x].troops<b.troops*.9&&(x!==1||Math.random()<.35));
+    if(arr.length){t=arr[rnd(arr.length)]}
+    else if(adj.has(0))t=0;
+  }
+  if(t<0)return;
+  const f=rnd(N);
+  launch(b.id,t,(early&&t===0?.5:t===0?.3:.2)+Math.random()*.12,t===0?f%W:null,t===0?f/W|0:null);
+}
+function step(){
+  if(paused||over)return;
+  tk++;
+  const cn=Array(NP+1).fill(0);for(const c of CITY)if(g[c]>0)cn[g[c]]++;
+  for(const p of P){
+    if(!p||!p.alive)continue;
+    const mx=(60*Math.pow(p.cells,.9)+200)*(p.bot?.6:1);
+    p.troops+=((1+Math.pow(p.troops,.73)/4+p.cells*.1)*Math.max(0,1-p.troops/mx)+cn[p.id]*.6)*(p.bot?(tk<900?.9:.55):1)/10;
+    if(p.troops>mx)p.troops=mx;
+  }
+  for(const a of atk){
+    const o=P[a.o],t=a.t?P[a.t]:null;
+    const cand=[];stamp++;
+    for(let i=0;i<N;i++)if(g[i]===a.o)for(const j of nb(i))if(g[j]===a.t&&MK[j]!==stamp){MK[j]=stamp;cand.push(j)}
+    if(!cand.length){o.troops+=a.n;a.n=0;continue}
+    const base=t?2+t.troops/Math.max(1,t.cells)*.9:1;
+    let k=a.t===0?Math.ceil(cand.length*.4)+1:Math.max(1,Math.ceil(cand.length*.12));
+    while(k-->0&&cand.length){
+      let bi=rnd(cand.length);
+      if(a.fx!=null)for(let r=0;r<3;r++){
+        const b=rnd(cand.length),c1=cand[b],c2=cand[bi];
+        if((c1%W-a.fx)**2+((c1/W|0)-a.fy)**2<(c2%W-a.fx)**2+((c2/W|0)-a.fy)**2)bi=b;
+      }
+      const c=cand.splice(bi,1)[0],cs=base*mul(E[c]);
+      if(a.n<cs)break;
+      take(c,a.o);a.n-=cs;
+    }
+    if(a.n<base*2.6){o.troops+=a.n;a.n=0}
+  }
+  atk=atk.filter(a=>a.n>0&&P[a.o].alive);
+  for(const p of P)if(p&&p.bot&&(tk+p.id)%(tk<900?7:20)===0)botThink(p);
+  if(tk%10===0)check();
+  draw();
+  if(tk%5===0)ui();
+}
+function check(){
+  if(P[1].cells===0)return end('Yenildin');
+  if(P.slice(2).every(p=>!p.alive))return end('Kazandın!');
+}
+function end(t){over=true;document.getElementById('ot').textContent=t;document.getElementById('ov').classList.add('on')}
+function draw(){
+  cx.drawImage(tc,0,0);
+  cx.globalAlpha=.58;
+  for(let i=0;i<N;i++){const o=g[i];if(o>0&&o!==WATER){cx.fillStyle=COL[o];cx.fillRect((i%W)*S,(i/W|0)*S,S,S)}}
+  cx.globalAlpha=1;
+  cx.fillStyle='rgba(0,0,0,.55)';
+  for(let i=0;i<N;i++){
+    const o=g[i];if(o===WATER)continue;
+    const x=i%W,y=i/W|0;
+    if(x<W-1&&g[i+1]!==WATER&&g[i+1]!==o)cx.fillRect(x*S+S-1,y*S,2,S);
+    if(y<H-1&&g[i+W]!==WATER&&g[i+W]!==o)cx.fillRect(x*S,y*S+S-1,S,2);
+  }
+  for(const c of CITY){const x=(c%W)*S,y=(c/W|0)*S;cx.fillStyle='#111';cx.fillRect(x+1,y+1,6,6);cx.fillStyle='#fff';cx.fillRect(x+2,y+2,4,4)}
+  cx.strokeStyle='#fff';cx.lineWidth=2;
+  for(const a of atk)if(a.o===1&&a.fx!=null){cx.globalAlpha=.9-(tk%10)*.08;cx.beginPath();cx.arc(a.fx*S+S/2,a.fy*S+S/2,5+(tk%10),0,7);cx.stroke()}
+  cx.globalAlpha=1;
+  const sx=[],sy=[],n=[];
+  for(let i=0;i<N;i++){const o=g[i];if(o>0&&o!==WATER){sx[o]=(sx[o]||0)+i%W;sy[o]=(sy[o]||0)+(i/W|0);n[o]=(n[o]||0)+1}}
+  cx.font='bold 11px sans-serif';cx.textAlign='center';cx.lineWidth=3;cx.strokeStyle='#000';cx.fillStyle='#fff';
+  for(let o=1;o<=NP;o++)if(n[o]>=15){const x=sx[o]/n[o]*S+S/2,y=sy[o]/n[o]*S+S/2,t=NAMES[o]+' '+fmt(P[o].troops);cx.strokeText(t,x,y);cx.fillText(t,x,y)}
+}
+function ui(){
+  const me=P[1],out=atk.filter(a=>a.o===1).reduce((s,a)=>s+a.n,0);
+  document.getElementById('sT').textContent='Birlik: '+fmt(me.troops);
+  document.getElementById('sA').textContent='Saldırıda: '+fmt(out);
+  document.getElementById('sL').textContent='Toprak: '+Math.round(me.cells/LAND*100)+'%';
+  document.getElementById('lb').innerHTML=(()=>{const s=P.slice(1).sort((a,b)=>b.cells-a.cells),t=s.slice(0,10);if(!t.includes(P[1]))t.push(P[1]);return t})().map(p=>
+    '<div class="row'+(p.alive?'':' dead')+'"><span class="dot" style="background:'+COL[p.id]+'"></span>'+(p.id===1?'<b>'+NAMES[1]+' (sen)</b>':NAMES[p.id])+'<i>'+Math.round(p.cells/LAND*100)+'% · '+fmt(p.troops)+'</i></div>').join('');
+}
+function msg(t){const m=document.getElementById('msg');m.textContent=t;clearTimeout(msg.h);msg.h=setTimeout(()=>m.textContent='',2600)}
+cv.addEventListener('click',e=>{
+  if(paused||over)return;
+  const r=cv.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left)/r.width*W),y=Math.floor((e.clientY-r.top)/r.height*H);
+  if(x<0||y<0||x>=W||y>=H)return;
+  const o=g[y*W+x],pct=+document.getElementById('pct').value/100;
+  let t=0;
+  if(o>1&&o!==WATER){
+    if(borders(1,o))t=o;
+    else msg('Bu ülkeyle sınırın yok, o yöne doğru boş araziye yayılıyorsun.');
+  }
+  if(t===0&&!borders(1,0)){msg('Yayılacak boş arazi kalmadı. Sınır komşusu bir ülkeye dokun.');return}
+  if(!launch(1,t,pct,x,y))msg('Yeterli birliğin yok, biraz bekle.');
+});
+document.getElementById('pct').addEventListener('input',e=>document.getElementById('pv').textContent=e.target.value+'%');
+document.getElementById('pause').addEventListener('click',e=>{paused=!paused;e.target.textContent=paused?'Devam et':'Duraklat'});
+document.getElementById('cancel').addEventListener('click',()=>{for(const a of atk)if(a.o===1){P[1].troops+=a.n;a.n=0}atk=atk.filter(a=>a.n>0);msg('Birlikler geri çekildi.')});
+document.getElementById('again').addEventListener('click',init);
+const cs=document.getElementById('country');cs.innerHTML=CO.map((c,i)=>'<option value="'+i+'">'+c[0]+'</option>').join('');cs.value=11;cs.addEventListener('change',init);
+init();
+setInterval(step,100);
+</script>
+</body>
+</html>
